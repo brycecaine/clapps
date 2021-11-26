@@ -16,7 +16,7 @@ entry_file_path = f'/data/data/com.termux/files/home/storage/shared/notes/entrie
 shutil.copyfile(journal_org_file_path, entry_file_path)
 
 # Clear contents of journal.org
-# open(journal_org_file_path, 'w').close()
+open(journal_org_file_path, 'w').close()
 
 # Get front matter
 author = 'author: Bryce Caine'
