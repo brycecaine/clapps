@@ -8,7 +8,7 @@ from dateutil.parser._parser import ParserError
 entries = [
     '23.43 DI',
     '14.57 Mo Bettahs',
-    '34.98 Costco 6/21/2022',
+    '34.98 Costco groceries 6/21/2022',
     '46.00 Jun 30 Xfinity',
     '18.23',
     '13',
@@ -50,8 +50,8 @@ def get_dt_from_details(details):
     return dt
 
 
-def get_vendor_id_from_details(details):
-    vendor_id = None
+def get_entity_id_from_details(details, entity_name):
+    entity_id = None
 
     details_parts = details.split(' ')
 
@@ -59,46 +59,39 @@ def get_vendor_id_from_details(details):
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
-    stmt = 'select id, name from vendor'
+    stmt = 'select id, name from {}'.format(entity_name)
 
     results = cur.execute(stmt).fetchall()
 
+    entities = [result['name'] for result in results]
 
-    '''
-    vendors = []
-    for result in results:
-        vendors.append(result['name'])
-    '''
+    entity_name = None
 
-    vendors = [result['name'] for result in results]
+    for entity in entities:
+        if entity in details:
+            entity_name = entity
 
-    vendor_name = None
-
-    for vendor in vendors:
-        if vendor in details:
-            vendor_name = vendor
-
-    vendors_set = set(vendors)
+    entities_set = set(entities)
     details_parts_set = set(details_parts)
-    intersection_set = details_parts_set.intersection(vendors_set)
+    intersection_set = details_parts_set.intersection(entities_set)
 
     if intersection_set:
-        # Assumes only one vendor allowed in entry
-        vendor_name = list(intersection_set)[0]
+        # Assumes only one entity allowed in entry
+        entity_name = list(intersection_set)[0]
 
-    vendor_ids = [
+    entity_ids = [
         result['id']
         for result in results
-        if result['name'] == vendor_name]
+        if result['name'] == entity_name]
 
-    vendor_id = None
+    entity_id = None
 
-    if vendor_ids:
-        vendor_id = vendor_ids[0]
+    if entity_ids:
+        entity_id = entity_ids[0]
 
     conn.close()
 
-    return vendor_id
+    return entity_id
 
 
 def parse_transaction(entry):
@@ -109,13 +102,15 @@ def parse_transaction(entry):
     amount = parts.pop(0)
     details = ' '.join(parts)  # details are everything other than the amount
 
-    vendor_id = get_vendor_id_from_details(details)
+    vendor_id = get_entity_id_from_details(details, 'vendor')
     dt = get_dt_from_details(details)
+    tag_ids = get_entity_id_from_details(details, 'tag')
 
     tx = {
         'amount': amount,
         'vendor_id': vendor_id,
         'dt': dt,
+        'tag_ids': tag_ids,
         'account_id': 3,
         'entry': entry,
         'file_path': '/wef/wef/wef',
@@ -132,6 +127,7 @@ def insert_entry_into_db(entry):
     cur = conn.cursor()
 
     tx = parse_transaction(entry)
+    tag_ids = tx.pop('tag_ids')
 
     tx_keys = ','.join(tx.keys())
     tx_param_fields = ','.join([f':{key}' for key, val in tx.items()])
@@ -139,8 +135,9 @@ def insert_entry_into_db(entry):
     stmt = f'''
         insert into tx ({tx_keys}) values ({tx_param_fields})
     '''
-
-    cur.execute(stmt, tx)
+    id = cur.execute('select last_insert_rowid()').fetchone()
+    print('id................')
+    print(id)
 
     conn.commit()
     conn.close()
