@@ -2,3 +2,4 @@ __pycache__
 *.db
 *.txt
 *.csv
+.DS_Store
