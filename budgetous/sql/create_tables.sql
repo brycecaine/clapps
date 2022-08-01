@@ -14,15 +14,17 @@ create table vendor (
 create table tx (
     id integer primary key,
     amount decimal(11,3),
-    vendor_id integer,
+    vendor text,
     dt datetime,
+    category text,
+    tags text,
     account_id integer,
+    seq_no integer,
     -- location_id integer foreign key (location_id) references location (id),  -- maybe later, or should location be attached to vendor?
     entry text,
     notes text,
     file_path text,
     bank_status text,  -- unreconciled, pending, cleared, reconciled, void
-    foreign key (vendor_id) references vendor (id),
     foreign key (account_id) references account (id)
 );
 

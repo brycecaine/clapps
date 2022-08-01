@@ -1,22 +1,39 @@
+from decimal import Decimal
+import numbers
 import sqlite3
-
 
 from datetime import datetime, timedelta
 from dateutil.parser import parse
 from dateutil.parser._parser import ParserError
 
-entries = [
-    '23.43 DI',
-    '14.57 Mo Bettahs',
-    '34.98 Costco groceries 6/21/2022',
-    '46.00 Jun 30 Xfinity',
-    '18.23',
-    '13',
-    '32.76 yesterday',
-    '53.19 Jul 20',
+VENDORS = [
+    'DI',
+    'Mo Bettahs',
+    'Costco',
+]
+CATEGORIES = [
+    'Groceries',
+    'Clothes',
+]
+TAGS = [
+    'follow-up',
+    'reimbursable',
 ]
 
-def get_date_from_list(items):
+entries = [
+    # '23.43 DI',
+    # '14.57 Mo Bettahs',
+    # '34.98 Costco Groceries 6/21/2022',
+    # '46.00 Jun 30 Xfinity',
+    # '18.23 reimbursable',
+    # '13',
+    # '32.76 yesterday',
+    # '53.19 Jul 20',
+    '42 split Groceries 20 Clothes 22',
+]
+
+
+def get_dt_from_list(items):
     dt = None
 
     for item in items:
@@ -34,7 +51,6 @@ def get_dt_from_details(details):
         dt = datetime.now()
 
     elif 'yesterday' in details:
-        print('why')
         dt = datetime.now() - timedelta(days=1)
 
     else:
@@ -42,7 +58,7 @@ def get_dt_from_details(details):
             dt = parse(details)
         except ParserError:
             parts = details.split(' ')
-            dt = get_date_from_list(parts)
+            dt = get_dt_from_list(parts)
 
             if dt is None:
                 dt = datetime.now()
@@ -50,99 +66,156 @@ def get_dt_from_details(details):
     return dt
 
 
-def get_entity_id_from_details(details, entity_name):
-    entity_id = None
+def get_vendor(entry):
+    return_val = None
 
-    details_parts = details.split(' ')
+    for vendor in VENDORS:
+        if vendor in entry:
+            return_val = vendor
+            break
 
-    conn = sqlite3.connect('budgetous.db')
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-
-    stmt = 'select id, name from {}'.format(entity_name)
-
-    results = cur.execute(stmt).fetchall()
-
-    entities = [result['name'] for result in results]
-
-    entity_name = None
-
-    for entity in entities:
-        if entity in details:
-            entity_name = entity
-
-    entities_set = set(entities)
-    details_parts_set = set(details_parts)
-    intersection_set = details_parts_set.intersection(entities_set)
-
-    if intersection_set:
-        # Assumes only one entity allowed in entry
-        entity_name = list(intersection_set)[0]
-
-    entity_ids = [
-        result['id']
-        for result in results
-        if result['name'] == entity_name]
-
-    entity_id = None
-
-    if entity_ids:
-        entity_id = entity_ids[0]
-
-    conn.close()
-
-    return entity_id
+    return return_val
 
 
-def parse_transaction(entry):
+def items_in_list(items, main_list, return_type):
+    main_list_set = set(main_list)
+    items_set = set(items)
+    intersection_set = items_set.intersection(main_list_set)
+    common_items = list(intersection_set)
+
+    if return_type == 'one':
+        try:
+            return_val = common_items[0]
+
+        except IndexError:
+            return_val = None
+
+    else:
+        return_val = common_items
+
+    return return_val
+
+
+def list_to_dict(list_in):
+    itr = iter(list_in)
+    res_dct = dict(zip(itr, itr))
+
+    return res_dct
+
+
+def get_split_parts(parts):
+    split_parts = {}
+
+    try:
+        idx = parts.index('split')
+
+        split_parts = list_to_dict(parts[idx+1:])
+
+    except ValueError:
+        pass
+
+    return split_parts
+
+
+def parse_txs(entry):
     tx = {}
-    print('--------------------')
-    print(f'{entry}')
     parts = entry.split(' ')
     amount = parts.pop(0)
     details = ' '.join(parts)  # details are everything other than the amount
 
-    vendor_id = get_entity_id_from_details(details, 'vendor')
+    vendor = get_vendor(entry)
     dt = get_dt_from_details(details)
-    tag_ids = get_entity_id_from_details(details, 'tag')
+    tags = ' '.join(items_in_list(parts, TAGS, 'all'))
 
-    tx = {
-        'amount': amount,
-        'vendor_id': vendor_id,
-        'dt': dt,
-        'tag_ids': tag_ids,
-        'account_id': 3,
-        'entry': entry,
-        'file_path': '/wef/wef/wef',
-    }
+    txs = []
 
-    print(tx)
+    split_parts = get_split_parts(parts)
 
-    return tx
+    if split_parts:
+        for i, split_part in enumerate(split_parts.items(), 1):
+            key, val = split_part
 
+            if key in CATEGORIES:
+                val_num = float(val)
+                tx = {
+                    'amount': val_num,
+                    'vendor': vendor,
+                    'dt': dt,
+                    'category': key,
+                    'tags': tags,
+                    'account_id': 3,
+                    'seq_no': i,
+                    'entry': entry,
+                    'file_path': '/wef/wef/wef',
+                }
+                txs.append(tx)
+    else:
+        category = items_in_list(parts, CATEGORIES, 'one')
+        tx = {
+            'amount': amount,
+            'vendor': vendor,
+            'dt': dt,
+            'category': category,
+            'tags': tags,
+            'account_id': 3,
+            'seq_no': 1,
+            'entry': entry,
+            'file_path': '/wef/wef/wef',
+        }
+        txs.append(tx)
+
+    return txs
+
+
+def get_where_clause(table_name, record):
+    where_clause_expressions = []
+    
+    for k, v in record.items():
+        comparator = '=' if v is not None else 'is'
+        where_clause_expression = f'and {k} {comparator} :{k}'
+        where_clause_expressions.append(where_clause_expression)
+
+    where_clause = ' '.join(where_clause_expressions)
+    where_clause = where_clause.replace('and', 'where', 1)
+
+    return where_clause
+
+
+def exists_in_db(table_name, record):
+    where_clause = get_where_clause(table_name, record)
+    sql = f'select * from {table_name} {where_clause}'
+
+    conn = sqlite3.connect('budgetous.db')
+    cur = conn.cursor()
+    cur.execute(sql, record)
+
+    exists = len(cur.fetchall()) > 0
+
+    conn.commit()
+    conn.close()
+
+    return exists
+    
 
 def insert_entry_into_db(entry):
-    # TODO: check if tx already exists
     conn = sqlite3.connect('budgetous.db')
     cur = conn.cursor()
 
-    tx = parse_transaction(entry)
-    tag_ids = tx.pop('tag_ids')
+    txs = parse_txs(entry)
 
-    tx_keys = ','.join(tx.keys())
-    tx_param_fields = ','.join([f':{key}' for key, val in tx.items()])
+    tx_keys = ','.join(txs[0].keys())
 
-    stmt = f'''
-        insert into tx ({tx_keys}) values ({tx_param_fields})
-    '''
-    id = cur.execute('select last_insert_rowid()').fetchone()
-    print('id................')
-    print(id)
+    for tx in txs:
+        tx_param_fields = ','.join([f':{key}' for key, val in tx.items()])
+
+        if not exists_in_db('tx', tx):
+            stmt = f'insert into tx ({tx_keys}) values ({tx_param_fields})'
+            cur.execute(stmt, tx)
 
     conn.commit()
     conn.close()
 
 
 for entry in entries:
+    print(entry)
     insert_entry_into_db(entry)
-
