@@ -1,8 +1,15 @@
+from nltk import word_tokenize, pos_tag
+import nltk
+# nltk.download('punkt')
+# nltk.download('averaged_perceptron_tagger')
+
+import sys
+import re
 from decimal import Decimal
 import numbers
 import sqlite3
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from dateutil.parser import parse
 from dateutil.parser._parser import ParserError
 
@@ -10,60 +17,31 @@ VENDORS = [
     'DI',
     'Mo Bettahs',
     'Costco',
+    'Xfinity',
 ]
 CATEGORIES = [
     'Groceries',
     'Clothes',
+    'Sleep',
 ]
 TAGS = [
     'follow-up',
     'reimbursable',
 ]
-
-entries = [
-    # '23.43 DI',
-    # '14.57 Mo Bettahs',
-    # '34.98 Costco Groceries 6/21/2022',
-    # '46.00 Jun 30 Xfinity',
-    # '18.23 reimbursable',
-    # '13',
-    # '32.76 yesterday',
-    # '53.19 Jul 20',
-    '42 split Groceries 20 Clothes 22',
-]
-
-
-def get_dt_from_list(items):
-    dt = None
-
-    for item in items:
-        try:
-            dt = parse(item)
-            break
-        except ParserError:
-            dt = datetime.now()
-
-    return dt
-        
-
-def get_dt_from_details(details):
-    if 'today' in details:
-        dt = datetime.now()
-
-    elif 'yesterday' in details:
-        dt = datetime.now() - timedelta(days=1)
-
-    else:
-        try:
-            dt = parse(details)
-        except ParserError:
-            parts = details.split(' ')
-            dt = get_dt_from_list(parts)
-
-            if dt is None:
-                dt = datetime.now()
-
-    return dt
+MONTH_NUMBERS = {
+    'jan': 1,
+    'feb': 2,
+    'mar': 3,
+    'apr': 4,
+    'may': 5,
+    'jun': 6,
+    'jul': 7,
+    'aug': 8,
+    'sep': 9,
+    'oct': 10,
+    'nov': 11,
+    'dec': 12,
+}
 
 
 def get_vendor(entry):
@@ -117,14 +95,229 @@ def get_split_parts(parts):
     return split_parts
 
 
-def parse_txs(entry):
-    tx = {}
-    parts = entry.split(' ')
-    amount = parts.pop(0)
-    details = ' '.join(parts)  # details are everything other than the amount
+def get_current_datetime(day_offset=0):
+    dt = datetime(
+        datetime.now().year, datetime.now().month,
+        datetime.now().day+day_offset, 0, 0)
 
+    return dt
+
+
+def get_dates(entry, return_type='date'):
+    dates = []
+
+    if 'yesterday' in entry:
+        yesterday = get_current_datetime(-1)
+        dates.append(yesterday)
+
+    if 'today' in entry:
+        today = get_current_datetime()
+        dates.append(today)
+
+    if 'tomorrow' in entry:
+        tomorrow = get_current_datetime(1)
+        dates.append(tomorrow)
+
+    year_pattern = r'(?P<year>[19|20]{2}[\d]{0,2})'
+    month_digit_pattern = r'(?P<month>0?[1-9]|1[012])'
+    # day_pattern = r'(?P<day>0?[1-9]|[12][0-9]|3[01])'
+    day_pattern = r'(?P<day>[12][0-9]|3[01]|0?[1-9])'
+    month_word_pattern = r'(?P<month_word>\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|(Nov|Dec)(?:ember)?))'
+
+    patterns = {
+        '%Y-%m-%d': f'{year_pattern}\-{month_digit_pattern}\-{day_pattern}',
+        '%-m/%-d/%Y': f'{month_digit_pattern}\/{day_pattern}\/{year_pattern}',
+        '%b %d %Y': f'{month_word_pattern}\s{day_pattern}\s?{year_pattern}?',
+    }
+
+    for format, pattern in patterns.items():
+        matches = re.finditer(pattern, entry)
+
+        for match in matches:
+            date_dict = {}
+
+            # Prepare dict to be passed to date()
+            for key, val in match.groupdict().items():
+                if val:
+                    if val.isnumeric():
+                        date_dict[key] = int(val)
+
+                    elif key == 'month_word':
+                        date_dict['month'] = MONTH_NUMBERS[val[0:3].lower()]
+
+            if 'year' not in date_dict:
+                date_dict['year'] = date.today().year
+
+            if 'hour' not in date_dict:
+                date_dict['hour'] = 0
+
+            if 'minute' not in date_dict:
+                date_dict['minute'] = 0
+
+            date_obj = datetime(**date_dict)
+
+            if return_type == 'str':
+                dates.append(date_obj.strftime(format))
+            else:
+                dates.append(date_obj)
+
+    return dates
+
+    
+def get_amount(entry, index=0):
+    # pattern = r'\d+[\.^\/]?\d*'
+    pattern = r'(?<!\d|/|-|\.|,)\d{1,}(?:\.\d{,2})?(?!\d|/|-|\.|,|:)'
+    matches = re.findall(pattern, entry)
+    entry_parts = entry.split(' ')
+
+    if matches:
+        amount = matches[index]
+        amount_index = entry_parts.index(amount)
+
+        try:
+            prior_part = '' if index == 0 else entry_parts[amount_index-1]
+
+        except IndexError:
+            prior_part = ''
+
+        try:
+            next_part = entry_parts[amount_index+1]
+        except IndexError:
+            next_part = ''
+
+        years = []
+        years.extend(list(range(1950, 2100)))  # 4 digit years
+        years.extend(list(range(0, 99)))  # 2 digit years
+        years = [str(year) for year in years]
+        months = [
+            'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+            'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
+        ]
+        days = list(range(1, 32))
+        days = [str(day) for day in days]
+
+        if prior_part.lower() in months or next_part.lower() in years or prior_part.lower() in days:
+            amount = float(get_amount(entry, index+1))
+        else:
+            amount = float(amount)
+
+    else:
+        parts = entry.split(' ')
+        first_part = parts[0]
+
+        if first_part.isnumeric():
+            amount = float(first_part)
+
+        else:
+            amount = None
+
+    return amount
+
+
+def get_category(entry):
+    entry_parts = entry.split(' ')
+    categories = list(set(CATEGORIES).intersection(set(entry_parts)))
+    category = categories[0] if categories else None
+
+    return category
+
+
+def is_tx(entry):
+    is_transaction = True if get_amount(entry) else False
+
+    return is_transaction
+
+
+def get_present_tense_verb(entry):
+    text = word_tokenize('i ' + entry)
+    tagged_words = pos_tag(text)
+
+    present_tense_verb = None
+
+    if tagged_words[1][1] == 'VBP':
+        present_tense_verb = tagged_words[1][0]
+
+    return present_tense_verb
+
+
+def is_todo(entry):
+    present_tense_verb = get_present_tense_verb(entry)
+    dates = get_dates(entry)
+
+    is_td = False
+
+    if present_tense_verb:
+        today = get_current_datetime()
+
+        for entry_date in dates:
+            if entry_date >= today:
+                is_td = True
+
+        if not dates:
+            is_td = True
+
+    return is_td
+
+
+def is_action(entry):
+    present_tense_verb = get_present_tense_verb(entry)
+    dates = get_dates(entry)
+
+    is_a = False
+
+    if present_tense_verb:
+        today = get_current_datetime()
+
+        for entry_date in dates:
+            if entry_date < today:
+                is_a = True
+
+    return is_a
+
+
+def is_action_old(entry):
+    category = get_category(entry)
+    dates = get_dates(entry, return_type='str')
+    
+    entry_elements = entry.split(' ')
+    action_elements = [category] + dates
+
+    # An action is only a category and dates
+    is_a = set(entry_elements) == set(action_elements)
+
+    return is_a
+
+
+def get_entry_type(entry):
+    if entry == '':
+        entry_type = None
+
+    elif is_tx(entry):
+        entry_type = 'transaction'
+
+    elif is_todo(entry):
+        entry_type = 'todo'
+
+    elif is_action(entry):
+        entry_type = 'action'
+
+    else:
+        entry_type = 'journal'
+
+    return entry_type
+
+
+def parse_txs(entry):
+    parts = entry.split(' ')
+
+    amount = get_amount(entry)
     vendor = get_vendor(entry)
-    dt = get_dt_from_details(details)
+
+    today = get_current_datetime()
+
+    dts = get_dates(entry, return_type='date') or [today]
+    dt = dts[0]
+
     tags = ' '.join(items_in_list(parts, TAGS, 'all'))
 
     txs = []
@@ -167,7 +360,7 @@ def parse_txs(entry):
     return txs
 
 
-def get_where_clause(table_name, record):
+def get_where_clause(record):
     where_clause_expressions = []
     
     for k, v in record.items():
@@ -182,7 +375,7 @@ def get_where_clause(table_name, record):
 
 
 def exists_in_db(table_name, record):
-    where_clause = get_where_clause(table_name, record)
+    where_clause = get_where_clause(record)
     sql = f'select * from {table_name} {where_clause}'
 
     conn = sqlite3.connect('budgetous.db')
@@ -197,7 +390,32 @@ def exists_in_db(table_name, record):
     return exists
     
 
-def insert_entry_into_db(entry):
+def insert_tx_into_db(entry):
+    """
+    folderbox transaction
+    id
+    spend_dt
+    description
+    merchant_id
+    category_id
+    account_id
+    amount
+
+    budgetous transaction
+    id
+    amount
+    vendor
+    dt
+    category
+    tags
+    account_id
+    seq_no
+    entry
+    notes
+    file_path
+    bank_status
+
+    """
     conn = sqlite3.connect('budgetous.db')
     cur = conn.cursor()
 
@@ -216,6 +434,104 @@ def insert_entry_into_db(entry):
     conn.close()
 
 
-for entry in entries:
-    print(entry)
-    insert_entry_into_db(entry)
+def parse_action(entry):
+    action = {}
+
+    parts = entry.split(' ')
+
+    action['category'] = get_category(entry)
+    dates = get_dates(entry)
+
+    try:
+        action['dt_1'] = dates[0]
+    except IndexError:
+        action['dt_1'] = datetime.now()
+
+    try:
+        action['dt_2'] = dates[1]
+    except IndexError:
+        action['dt_2'] = ''
+
+    return action
+
+
+def insert_todo_into_file(entry):
+    # Insert into orgzly file
+    pass
+
+
+def insert_action_into_db(entry):
+    action = parse_action(entry)
+
+    conn = sqlite3.connect('budgetous.db')
+
+    sql_str = ('select * '
+               '  from action '
+               ' where category = ? '
+               '   and end_dt is null')
+
+    cursor = conn.execute(sql_str, (action['category'],))
+
+    results = cursor.fetchall()
+
+    if len(results) == 0:
+        if not action['dt_2']:
+            sql_str = ('insert '
+                       '  into action '
+                       '       (category, begin_dt) '
+                       'values (?, ?)')
+
+            args = (action['category'], action['dt_1'])
+
+        else:
+            sql_str = ('insert '
+                       '  into action '
+                       '       (category, begin_dt, end_dt) '
+                       'values (?, ?, ?)')
+
+            args = (action['category'], action['dt_1'], action['dt_2'])
+
+    else:
+        sql_str = ('update "action" '
+                   '   set end_dt = ? '
+                   ' where category = ? '
+                   '   and end_dt is null')
+
+        args = (action['dt_1'], action['category'])
+
+    cursor = conn.execute(sql_str, args)
+
+    conn.commit()
+    conn.close()
+
+
+def insert_journal_into_file(entry):
+    pass
+
+
+if __name__ == '__main__':
+    # TODO: Convert to argparse and include location
+    #       https://stackoverflow.com/a/33902937
+    sys.argv.pop(0)
+    entry = ' '.join(sys.argv)
+    entry_type = get_entry_type(entry)
+
+    if entry_type == 'transaction':
+        print('tx')
+        insert_tx_into_db(entry)
+
+    if entry_type == 'todo':
+        print('todo')
+        insert_todo_into_db(entry)
+
+    if entry_type == 'action':
+        print('action')
+        insert_action_into_db(entry)
+
+    if entry_type == 'journal':
+        print('journal')
+        insert_journal_into_file(entry)
+
+    if entry_type is None:
+        print('No entry type')
+
