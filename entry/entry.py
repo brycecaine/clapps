@@ -45,6 +45,7 @@ MONTH_NUMBERS = {
 
 
 def get_vendor(entry):
+    # docstring
     return_val = None
 
     for vendor in VENDORS:
@@ -229,7 +230,7 @@ def is_tx(entry):
 
 
 def get_present_tense_verb(entry):
-    text = word_tokenize('i ' + entry)
+    text = word_tokenize('I ' + entry)
     tagged_words = pos_tag(text)
 
     present_tense_verb = None
@@ -260,17 +261,19 @@ def is_todo(entry):
 
 
 def is_action(entry):
-    present_tense_verb = get_present_tense_verb(entry)
     dates = get_dates(entry)
 
     is_a = False
 
-    if present_tense_verb:
+    if entry.split(' ')[0] in CATEGORIES:
         today = get_current_datetime()
 
         for entry_date in dates:
             if entry_date < today:
                 is_a = True
+
+        if not dates:
+            is_a = True
 
     return is_a
 
@@ -295,11 +298,11 @@ def get_entry_type(entry):
     elif is_tx(entry):
         entry_type = 'transaction'
 
-    elif is_todo(entry):
-        entry_type = 'todo'
-
     elif is_action(entry):
         entry_type = 'action'
+
+    elif is_todo(entry):
+        entry_type = 'todo'
 
     else:
         entry_type = 'journal'
@@ -376,49 +379,16 @@ def get_where_clause(record):
 
 def exists_in_db(table_name, record):
     where_clause = get_where_clause(record)
-    sql = f'select * from {table_name} {where_clause}'
+    sql_str = f'select * from {table_name} {where_clause}'
 
-    conn = sqlite3.connect('budgetous.db')
-    cur = conn.cursor()
-    cur.execute(sql, record)
+    results = run_sql(sql_str, params=record)
 
-    exists = len(cur.fetchall()) > 0
-
-    conn.commit()
-    conn.close()
+    exists = len(results) > 0
 
     return exists
     
 
 def insert_tx_into_db(entry):
-    """
-    folderbox transaction
-    id
-    spend_dt
-    description
-    merchant_id
-    category_id
-    account_id
-    amount
-
-    budgetous transaction
-    id
-    amount
-    vendor
-    dt
-    category
-    tags
-    account_id
-    seq_no
-    entry
-    notes
-    file_path
-    bank_status
-
-    """
-    conn = sqlite3.connect('budgetous.db')
-    cur = conn.cursor()
-
     txs = parse_txs(entry)
 
     tx_keys = ','.join(txs[0].keys())
@@ -427,11 +397,8 @@ def insert_tx_into_db(entry):
         tx_param_fields = ','.join([f':{key}' for key, val in tx.items()])
 
         if not exists_in_db('tx', tx):
-            stmt = f'insert into tx ({tx_keys}) values ({tx_param_fields})'
-            cur.execute(stmt, tx)
-
-    conn.commit()
-    conn.close()
+            sql_str = f'insert into tx ({tx_keys}) values ({tx_param_fields})'
+            run_sql(sql_str, params=tx)
 
 
 def parse_action(entry):
@@ -460,28 +427,52 @@ def insert_todo_into_file(entry):
     pass
 
 
-def insert_action_into_db(entry):
-    action = parse_action(entry)
+def get_entry_db_conn():
+    conn = sqlite3.connect('entry.db')
 
-    conn = sqlite3.connect('budgetous.db')
+    return conn
 
+
+def run_sql(sql_str, params=None):
+    conn = get_entry_db_conn()
+
+    cursor = conn.cursor()
+    cursor.execute(sql_str, params)
+
+    results = cursor.fetchall()
+
+    conn.commit()
+    conn.close()
+
+    return results
+
+
+def get_started_action(category):
     sql_str = ('select * '
                '  from action '
                ' where category = ? '
                '   and end_dt is null')
 
-    cursor = conn.execute(sql_str, (action['category'],))
+    results = run_sql(sql_str, (category,))
 
-    results = cursor.fetchall()
+    started_action = results[0] if results else None
 
-    if len(results) == 0:
+    return started_action
+
+
+def insert_action_into_db(entry):
+    action = parse_action(entry)
+
+    started_action = get_started_action(action['category'])
+
+    if not started_action:
         if not action['dt_2']:
             sql_str = ('insert '
                        '  into action '
                        '       (category, begin_dt) '
                        'values (?, ?)')
 
-            args = (action['category'], action['dt_1'])
+            params = (action['category'], action['dt_1'])
 
         else:
             sql_str = ('insert '
@@ -489,7 +480,7 @@ def insert_action_into_db(entry):
                        '       (category, begin_dt, end_dt) '
                        'values (?, ?, ?)')
 
-            args = (action['category'], action['dt_1'], action['dt_2'])
+            params = (action['category'], action['dt_1'], action['dt_2'])
 
     else:
         sql_str = ('update "action" '
@@ -497,12 +488,9 @@ def insert_action_into_db(entry):
                    ' where category = ? '
                    '   and end_dt is null')
 
-        args = (action['dt_1'], action['category'])
+        params = (action['dt_1'], action['category'])
 
-    cursor = conn.execute(sql_str, args)
-
-    conn.commit()
-    conn.close()
+    run_sql(sql_str, params)
 
 
 def insert_journal_into_file(entry):
@@ -522,7 +510,7 @@ if __name__ == '__main__':
 
     if entry_type == 'todo':
         print('todo')
-        insert_todo_into_db(entry)
+        insert_todo_into_file(entry)
 
     if entry_type == 'action':
         print('action')
@@ -534,4 +522,6 @@ if __name__ == '__main__':
 
     if entry_type is None:
         print('No entry type')
+
+
 

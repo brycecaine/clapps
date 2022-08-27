@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from transaction import get_amount, get_dates, get_entry_type, parse_txs, is_todo
+from entry.entry import get_amount, get_dates, get_entry_type, parse_txs, is_todo, exists_in_db, insert_tx_into_db, get_started_action
 import unittest
 
 
@@ -389,6 +389,22 @@ class ParseTestCase(unittest.TestCase):
         entry_is_todo = is_todo(entry)
         self.assertFalse(entry_is_todo)
 
+
+class DBTestCase(unittest.TestCase):
+    def test_tx_exists_in_db(self):
+        tx = {'id': '1'}
+        self.assertTrue(exists_in_db('tx', tx))
+
+    def test_tx_does_not_exist_in_db(self):
+        tx = {'id': '-1'}
+        self.assertFalse(exists_in_db('tx', tx))
+
+    def test_insert_tx_into_db(self):
+        insert_tx_into_db('5 socks')
+
+    def test_get_started_action(self):
+        started_action = get_started_action('Sleep')
+        self.assertFalse(started_action)
 
 if __name__ == '__main__':
     unittest.main()
