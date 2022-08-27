@@ -1,3 +1,4 @@
+import os
 from nltk import word_tokenize, pos_tag
 import nltk
 # nltk.download('punkt')
@@ -12,6 +13,8 @@ import sqlite3
 from datetime import datetime, timedelta, date
 from dateutil.parser import parse
 from dateutil.parser._parser import ParserError
+
+ENTRY_DIR = os.environ['ENTRY_DIR']
 
 VENDORS = [
     'DI',
@@ -428,7 +431,7 @@ def insert_todo_into_file(entry):
 
 
 def get_entry_db_conn():
-    conn = sqlite3.connect('entry.db')
+    conn = sqlite3.connect(f'{ENTRY_DIR}/entry.db')
 
     return conn
 
