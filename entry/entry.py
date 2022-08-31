@@ -3,12 +3,15 @@ from nltk import word_tokenize, pos_tag
 import nltk
 # nltk.download('punkt')
 # nltk.download('averaged_perceptron_tagger')
-
+from geopy.geocoders import Nominatim
 import sys
 import re
 from decimal import Decimal
 import numbers
 import sqlite3
+import json
+import requests
+from dateutil.parser._parser import ParserError
 
 from datetime import datetime, timedelta, date
 from dateutil.parser import parse
@@ -100,9 +103,9 @@ def get_split_parts(parts):
 
 
 def get_current_datetime(day_offset=0):
-    dt = datetime(
+    dt = date(
         datetime.now().year, datetime.now().month,
-        datetime.now().day+day_offset, 0, 0)
+        datetime.now().day+day_offset)
 
     return dt
 
@@ -337,12 +340,12 @@ def parse_txs(entry):
             if key in CATEGORIES:
                 val_num = float(val)
                 tx = {
-                    'amount': val_num,
+                    'amount': val_num * -1,
                     'vendor': vendor,
                     'dt': dt,
                     'category': key,
                     'tags': tags,
-                    'account_id': 3,
+                    'account_id': 1,
                     'seq_no': i,
                     'entry': entry,
                     'file_path': '/wef/wef/wef',
@@ -351,12 +354,12 @@ def parse_txs(entry):
     else:
         category = items_in_list(parts, CATEGORIES, 'one')
         tx = {
-            'amount': amount,
+            'amount': amount * -1,
             'vendor': vendor,
             'dt': dt,
             'category': category,
             'tags': tags,
-            'account_id': 3,
+            'account_id': 1,
             'seq_no': 1,
             'entry': entry,
             'file_path': '/wef/wef/wef',
@@ -496,15 +499,100 @@ def insert_action_into_db(entry):
     run_sql(sql_str, params)
 
 
-def insert_journal_into_file(entry):
+def insert_contact_into_db(entry):
     pass
+
+
+def insert_journal_into_file(entry):
+    print(entry)
+    # Get journal_tally_file
+    journal_tally_filename = f'{ENTRY_DIR}/journal_tally.txt'
+    journal_tally_file = open(journal_tally_filename, 'r+')
+
+    today = date.today()
+    
+    # Get date from journal_tally_file
+    journal_tally_data = journal_tally_file.read().splitlines(True)
+    
+    try:
+        journal_tally_date = parse(journal_tally_data[0])
+    except (IndexError, ParserError):
+        journal_tally_date = today
+
+    # TODO: Close file here?
+
+    journal_tally_date = date(journal_tally_date.year, journal_tally_date.month, journal_tally_date.day)
+    print(journal_tally_date)
+    print(today)
+    if journal_tally_date != today:
+        # Copy journal_tally_file to dated_file
+        current_date_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+
+        dated_journal_filename = f'/data/data/com.termux/files/home/storage/shared/journal/entries/text/{current_date_str}-bryce-eryn-caine-journal.txt'
+        """
+        with open(dated_journal_filename, 'w') as dated_journal_filename:
+            dated_journal_filename.writelines(journal_tally_data[1:])
+        """
+        # shutil.copy(journal_tally_filename, dated_journal_filename)
+
+        # Add front_matter to dated_file
+        author = 'author: Bryce Caine'
+        entry_date = f'date: {current_date_str}'
+        tags = 'tags: journal'
+        location_dict = json.loads(os.popen('termux-location').read())
+        latitude = location_dict['latitude']
+        longitude = location_dict['longitude']
+        altitude_ft = round(location_dict['altitude'] * 3.28084)
+        altitude = f'altitude: {altitude_ft}'
+        app = Nominatim(user_agent='journal')
+        coordinates = f'{latitude}, {longitude}'
+        location_raw = app.reverse(coordinates, language='en').raw
+        house_number = location_raw['address']['house_number']
+        road = location_raw['address']['road']
+        print(location_raw)
+        try:
+            town = location_raw['address']['town']
+        except KeyError:
+            town = location_raw['address']['suburb']
+        state = location_raw['address']['state']
+        location = f'location: {house_number} {road}, {town}, {state}'
+        # location = location_raw['display_name']
+        # location = f'latitude: {latitude}\nlongitude: {longitude}\naltitude: {altitude}'
+        weather_response = requests.get('http://wttr.in/?format=%C+%t+%h+humidity+%w+wind+%p+precip')
+        weather = f'weather: {weather_response.text}'
+        front_matter = f'---\n{author}\n{entry_date}\n{tags}\n{location}\n{altitude}\n{weather}\n---\n'
+
+        print(front_matter)
+        print('uuuuuuuuuuuuhhh')
+        print(journal_tally_data[1:])
+
+        with open(dated_journal_filename, 'w') as dated_journal_filename:
+            dated_journal_filename.write(front_matter)
+            dated_journal_filename.writelines(journal_tally_data[1:])
+
+        """
+        with open(entry_file_path, 'w') as entry_file:
+            entry_file.write(front_matter + journal_tally_data[1:])
+        """
+        # Clear contents of journal_tally_file
+        journal_tally_file.truncate(0)
+
+        # Add date to journal_tally_file
+        journal_tally_file.write(f'{today}\n')
+
+    # Add entry to journal_tally_file
+    print(entry)
+    journal_tally_file.write(f'{entry}\n')
 
 
 if __name__ == '__main__':
     # TODO: Convert to argparse and include location
     #       https://stackoverflow.com/a/33902937
+    print(sys.argv)
     sys.argv.pop(0)
+    print(sys.argv)
     entry = ' '.join(sys.argv)
+    print(entry)
     entry_type = get_entry_type(entry)
 
     if entry_type == 'transaction':
@@ -518,6 +606,10 @@ if __name__ == '__main__':
     if entry_type == 'action':
         print('action')
         insert_action_into_db(entry)
+
+    if entry_type == 'contact':
+        print('contact')
+        insert_contact_into_db(entry)
 
     if entry_type == 'journal':
         print('journal')
