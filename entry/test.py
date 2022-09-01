@@ -1,6 +1,9 @@
-from datetime import date, datetime
-from entry.entry import get_amount, get_dates, get_entry_type, parse_txs, is_todo, exists_in_db, insert_tx_into_db, get_started_action
 import unittest
+from datetime import date, datetime
+
+from entry.entry import (Transaction, exists_in_db, get_amount, get_dates,
+                         get_entry_type, get_started_action, insert_tx_into_db,
+                         is_todo, parse_txs)
 
 
 class AmountTestCase(unittest.TestCase):
@@ -405,6 +408,14 @@ class DBTestCase(unittest.TestCase):
     def test_get_started_action(self):
         started_action = get_started_action('Sleep')
         self.assertFalse(started_action)
+
+
+class TransactionClassCase(unittest.TestCase):
+    def test_transaction_class(self):
+        entry = '3.45 toothpick'
+        transaction = Transaction(entry)
+        self.assertEqual(transaction.amount, -3.45)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -51,6 +51,37 @@ MONTH_NUMBERS = {
 }
 
 
+class Transaction:
+    def __init__(self, entry):
+        parts = entry.split(' ')
+
+        amount = get_amount(entry)
+        vendor = get_vendor(entry)
+        today = get_current_datetime()
+        dts = get_dates(entry, return_type='date') or [today]
+        dt = dts[0]
+        category = items_in_list(parts, CATEGORIES, 'one')
+        tags = ' '.join(items_in_list(parts, TAGS, 'all'))
+        account_id = get_account_id(entry)
+
+        amount = amount * -1 if account_id == 1 else amount
+
+        transaction_dict = {
+            'amount': amount,
+            'vendor': vendor,
+            'dt': dt,
+            'category': category,
+            'tags': tags,
+            'account_id': account_id,
+            'seq_no': 1,
+            'entry': entry,
+            'file_path': '/wef/wef/wef',
+        }
+
+        for key, val in transaction_dict.items():
+            setattr(self, key, val)
+
+
 def get_vendor(entry):
     # docstring
     return_val = None
