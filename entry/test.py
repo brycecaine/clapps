@@ -405,6 +405,10 @@ class DBTestCase(unittest.TestCase):
     def test_insert_tx_into_db(self):
         insert_tx_into_db('5 socks')
 
+    def test_insert_tx_obj_into_db(self):
+        transaction = Transaction('500 apple')
+        transaction.insert_into_db()
+
     def test_get_started_action(self):
         started_action = get_started_action('Sleep')
         self.assertFalse(started_action)

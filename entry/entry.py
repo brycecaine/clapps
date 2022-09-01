@@ -53,16 +53,24 @@ MONTH_NUMBERS = {
 
 class Transaction:
     def __init__(self, entry):
-        parts = entry.split(' ')
+        self.entry = entry
 
-        amount = get_amount(entry)
-        vendor = get_vendor(entry)
+        transaction_dict = self.get_dict()
+
+        for key, val in transaction_dict.items():
+            setattr(self, key, val)
+
+    def get_dict(self):
+        parts = self.entry.split(' ')
+
+        amount = get_amount(self.entry)
+        vendor = get_vendor(self.entry)
         today = get_current_datetime()
-        dts = get_dates(entry, return_type='date') or [today]
+        dts = get_dates(self.entry, return_type='date') or [today]
         dt = dts[0]
         category = items_in_list(parts, CATEGORIES, 'one')
         tags = ' '.join(items_in_list(parts, TAGS, 'all'))
-        account_id = get_account_id(entry)
+        account_id = get_account_id(self.entry)
 
         amount = amount * -1 if account_id == 1 else amount
 
@@ -74,12 +82,22 @@ class Transaction:
             'tags': tags,
             'account_id': account_id,
             'seq_no': 1,
-            'entry': entry,
+            'entry': self.entry,
             'file_path': '/wef/wef/wef',
         }
 
-        for key, val in transaction_dict.items():
-            setattr(self, key, val)
+        return transaction_dict
+
+    def insert_into_db(self):
+        tx = self.get_dict()
+
+        tx_keys = ','.join(tx.keys())
+
+        tx_param_fields = ','.join([f':{key}' for key, val in tx.items()])
+
+        if not exists_in_db('tx', tx):
+            sql_str = f'insert into tx ({tx_keys}) values ({tx_param_fields})'
+            run_sql(sql_str, params=tx)
 
 
 def get_vendor(entry):
@@ -366,6 +384,7 @@ def parse_txs(entry):
 
     txs = []
 
+    # TODO: Incorporate this split logic into entry.parse_txs (an Entry instance method)
     split_parts = get_split_parts(parts)
 
     if split_parts:
@@ -430,19 +449,6 @@ def exists_in_db(table_name, record):
 
     return exists
     
-
-def insert_tx_into_db(entry):
-    txs = parse_txs(entry)
-
-    tx_keys = ','.join(txs[0].keys())
-
-    for tx in txs:
-        tx_param_fields = ','.join([f':{key}' for key, val in tx.items()])
-
-        if not exists_in_db('tx', tx):
-            sql_str = f'insert into tx ({tx_keys}) values ({tx_param_fields})'
-            run_sql(sql_str, params=tx)
-
 
 def parse_action(entry):
     action = {}
@@ -614,7 +620,8 @@ if __name__ == '__main__':
 
     if entry_type == 'transaction':
         print('tx')
-        insert_tx_into_db(entry)
+        transaction = Transaction(entry)
+        transaction.insert_into_db()
 
     if entry_type == 'todo':
         print('todo')
