@@ -301,19 +301,6 @@ def is_action(entry):
     return is_a
 
 
-def is_action_old(entry):
-    category = get_category(entry)
-    dates = get_dates(entry, return_type='str')
-    
-    entry_elements = entry.split(' ')
-    action_elements = [category] + dates
-
-    # An action is only a category and dates
-    is_a = set(entry_elements) == set(action_elements)
-
-    return is_a
-
-
 def get_entry_type(entry):
     if entry == '':
         entry_type = None
