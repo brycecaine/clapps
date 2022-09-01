@@ -23,6 +23,7 @@ VENDORS = [
     'DI',
     'Mo Bettahs',
     'Costco',
+    'Fred Meyer',
     'Xfinity',
 ]
 CATEGORIES = [
@@ -102,15 +103,18 @@ def get_split_parts(parts):
     return split_parts
 
 
-def get_current_datetime(day_offset=0):
-    dt = date(
-        datetime.now().year, datetime.now().month,
-        datetime.now().day+day_offset)
+def get_current_datetime(day_offset=0, kind='date'):
+    now = datetime.now()
+    
+    if kind == 'date':
+        dt = date(now.year, now.month, now.day) + timedelta(days=day_offset)
+    elif kind == 'datetime':
+        dt = datetime(now.year, now.month, now.day, 0, 0) + timedelta(days=day_offset)
 
     return dt
 
 
-def get_dates(entry, return_type='date'):
+def get_dates(entry, return_type='datetime'):
     dates = []
 
     if 'yesterday' in entry:
@@ -155,13 +159,17 @@ def get_dates(entry, return_type='date'):
             if 'year' not in date_dict:
                 date_dict['year'] = date.today().year
 
-            if 'hour' not in date_dict:
-                date_dict['hour'] = 0
+            if return_type == 'datetime':
+                if 'hour' not in date_dict:
+                    date_dict['hour'] = 0
 
-            if 'minute' not in date_dict:
-                date_dict['minute'] = 0
+                if 'minute' not in date_dict:
+                    date_dict['minute'] = 0
 
-            date_obj = datetime(**date_dict)
+                date_obj = datetime(**date_dict)
+
+            elif return_type == 'date':
+                date_obj = date(**date_dict)
 
             if return_type == 'str':
                 dates.append(date_obj.strftime(format))
@@ -221,6 +229,15 @@ def get_amount(entry, index=0):
     return amount
 
 
+def get_account_id(entry):
+    if 'hsa' in entry.lower():
+        account_id = 2
+    else:
+        account_id = 1
+
+    return account_id
+
+
 def get_category(entry):
     entry_parts = entry.split(' ')
     categories = list(set(CATEGORIES).intersection(set(entry_parts)))
@@ -272,7 +289,7 @@ def is_action(entry):
     is_a = False
 
     if entry.split(' ')[0] in CATEGORIES:
-        today = get_current_datetime()
+        today = get_current_datetime(kind='datetime')
 
         for entry_date in dates:
             if entry_date < today:
@@ -339,19 +356,21 @@ def parse_txs(entry):
 
             if key in CATEGORIES:
                 val_num = float(val)
+                account_id = get_account_id(entry)
                 tx = {
                     'amount': val_num * -1,
                     'vendor': vendor,
                     'dt': dt,
                     'category': key,
                     'tags': tags,
-                    'account_id': 1,
+                    'account_id': account_id,
                     'seq_no': i,
                     'entry': entry,
                     'file_path': '/wef/wef/wef',
                 }
                 txs.append(tx)
     else:
+        account_id = get_account_id(entry)
         category = items_in_list(parts, CATEGORIES, 'one')
         tx = {
             'amount': amount * -1,
@@ -359,7 +378,7 @@ def parse_txs(entry):
             'dt': dt,
             'category': category,
             'tags': tags,
-            'account_id': 1,
+            'account_id': account_id,
             'seq_no': 1,
             'entry': entry,
             'file_path': '/wef/wef/wef',
@@ -504,7 +523,6 @@ def insert_contact_into_db(entry):
 
 
 def insert_journal_into_file(entry):
-    print(entry)
     # Get journal_tally_file
     journal_tally_filename = f'{ENTRY_DIR}/journal_tally.txt'
     journal_tally_file = open(journal_tally_filename, 'r+')
@@ -522,18 +540,12 @@ def insert_journal_into_file(entry):
     # TODO: Close file here?
 
     journal_tally_date = date(journal_tally_date.year, journal_tally_date.month, journal_tally_date.day)
-    print(journal_tally_date)
-    print(today)
+
     if journal_tally_date != today:
         # Copy journal_tally_file to dated_file
         current_date_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
 
         dated_journal_filename = f'/data/data/com.termux/files/home/storage/shared/journal/entries/text/{current_date_str}-bryce-eryn-caine-journal.txt'
-        """
-        with open(dated_journal_filename, 'w') as dated_journal_filename:
-            dated_journal_filename.writelines(journal_tally_data[1:])
-        """
-        # shutil.copy(journal_tally_filename, dated_journal_filename)
 
         # Add front_matter to dated_file
         author = 'author: Bryce Caine'
@@ -549,7 +561,6 @@ def insert_journal_into_file(entry):
         location_raw = app.reverse(coordinates, language='en').raw
         house_number = location_raw['address']['house_number']
         road = location_raw['address']['road']
-        print(location_raw)
         try:
             town = location_raw['address']['town']
         except KeyError:
@@ -562,18 +573,10 @@ def insert_journal_into_file(entry):
         weather = f'weather: {weather_response.text}'
         front_matter = f'---\n{author}\n{entry_date}\n{tags}\n{location}\n{altitude}\n{weather}\n---\n'
 
-        print(front_matter)
-        print('uuuuuuuuuuuuhhh')
-        print(journal_tally_data[1:])
-
         with open(dated_journal_filename, 'w') as dated_journal_filename:
             dated_journal_filename.write(front_matter)
             dated_journal_filename.writelines(journal_tally_data[1:])
 
-        """
-        with open(entry_file_path, 'w') as entry_file:
-            entry_file.write(front_matter + journal_tally_data[1:])
-        """
         # Clear contents of journal_tally_file
         journal_tally_file.truncate(0)
 
@@ -581,18 +584,14 @@ def insert_journal_into_file(entry):
         journal_tally_file.write(f'{today}\n')
 
     # Add entry to journal_tally_file
-    print(entry)
     journal_tally_file.write(f'{entry}\n')
 
 
 if __name__ == '__main__':
     # TODO: Convert to argparse and include location
     #       https://stackoverflow.com/a/33902937
-    print(sys.argv)
     sys.argv.pop(0)
-    print(sys.argv)
     entry = ' '.join(sys.argv)
-    print(entry)
     entry_type = get_entry_type(entry)
 
     if entry_type == 'transaction':
@@ -617,6 +616,4 @@ if __name__ == '__main__':
 
     if entry_type is None:
         print('No entry type')
-
-
-
+        insert_journal_into_file(entry)

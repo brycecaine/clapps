@@ -171,10 +171,10 @@ class ParseTestCase(unittest.TestCase):
         entry = '23.43 DI'
 
         expected_txs = [
-            {'account_id': 3,
-             'amount': 23.43,
+            {'account_id': 1,
+             'amount': -23.43,
              'category': None,
-             'dt': datetime(datetime.now().year, datetime.now().month, datetime.now().day, 0, 0),
+             'dt': date(datetime.now().year, datetime.now().month, datetime.now().day),
              'entry': entry,
              'file_path': '/wef/wef/wef',
              'seq_no': 1,
@@ -189,10 +189,10 @@ class ParseTestCase(unittest.TestCase):
         entry = '14.57 Mo Bettahs'
 
         expected_txs = [
-            {'account_id': 3,
-             'amount': 14.57,
+            {'account_id': 1,
+             'amount': -14.57,
              'category': None,
-             'dt': datetime(datetime.now().year, datetime.now().month, datetime.now().day, 0, 0),
+             'dt': date(datetime.now().year, datetime.now().month, datetime.now().day),
              'entry': entry,
              'file_path': '/wef/wef/wef',
              'seq_no': 1,
@@ -207,10 +207,10 @@ class ParseTestCase(unittest.TestCase):
         entry = '34.98 Costco Groceries 6/21/2022'
 
         expected_txs = [
-            {'account_id': 3,
-             'amount': 34.98,
+            {'account_id': 1,
+             'amount': -34.98,
              'category': 'Groceries',
-             'dt': datetime(2022, 6, 21, 0, 0),
+             'dt': date(2022, 6, 21),
              'entry': entry,
              'file_path': '/wef/wef/wef',
              'seq_no': 1,
@@ -225,10 +225,10 @@ class ParseTestCase(unittest.TestCase):
         entry = '46.00 Jun 30 Xfinity'
 
         expected_txs = [
-            {'account_id': 3,
-             'amount': 46.00,
+            {'account_id': 1,
+             'amount': -46.00,
              'category': None,
-             'dt': datetime(2022, 6, 30, 0, 0),
+             'dt': date(2022, 6, 30),
              'entry': entry,
              'file_path': '/wef/wef/wef',
              'seq_no': 1,
@@ -243,10 +243,10 @@ class ParseTestCase(unittest.TestCase):
         entry = '18.23 reimbursable'
 
         expected_txs = [
-            {'account_id': 3,
-             'amount': 18.23,
+            {'account_id': 1,
+             'amount': -18.23,
              'category': None,
-             'dt': datetime(datetime.now().year, datetime.now().month, datetime.now().day, 0, 0),
+             'dt': date(datetime.now().year, datetime.now().month, datetime.now().day),
              'entry': entry,
              'file_path': '/wef/wef/wef',
              'seq_no': 1,
@@ -261,10 +261,10 @@ class ParseTestCase(unittest.TestCase):
         entry = '13'
 
         expected_txs = [
-            {'account_id': 3,
-             'amount': 13,
+            {'account_id': 1,
+             'amount': -13,
              'category': None,
-             'dt': datetime(datetime.now().year, datetime.now().month, datetime.now().day, 0, 0),
+             'dt': date(datetime.now().year, datetime.now().month, datetime.now().day),
              'entry': entry,
              'file_path': '/wef/wef/wef',
              'seq_no': 1,
@@ -279,10 +279,10 @@ class ParseTestCase(unittest.TestCase):
         entry = '32.76 yesterday'
 
         expected_txs = [
-            {'account_id': 3,
-             'amount': 32.76,
+            {'account_id': 1,
+             'amount': -32.76,
              'category': None,
-             'dt': datetime(datetime.now().year, datetime.now().month, datetime.now().day-1, 0, 0),
+             'dt': date(datetime.now().year, datetime.now().month, datetime.now().day-1),
              'entry': entry,
              'file_path': '/wef/wef/wef',
              'seq_no': 1,
@@ -297,10 +297,10 @@ class ParseTestCase(unittest.TestCase):
         entry = '53.19 Jul 20'
 
         expected_txs = [
-            {'account_id': 3,
-             'amount': 53.19,
+            {'account_id': 1,
+             'amount': -53.19,
              'category': None,
-             'dt': datetime(2022, 7, 20, 0, 0),
+             'dt': date(2022, 7, 20),
              'entry': entry,
              'file_path': '/wef/wef/wef',
              'seq_no': 1,
@@ -315,22 +315,22 @@ class ParseTestCase(unittest.TestCase):
         entry = '42 split Groceries 20 Clothes 22'
 
         expected_txs = [
-            {'amount': 20.0,
+            {'amount': -20.0,
              'vendor': None,
-             'dt': datetime(datetime.now().year, datetime.now().month, datetime.now().day, 0, 0),
+             'dt': date(datetime.now().year, datetime.now().month, datetime.now().day),
              'category': 'Groceries',
              'tags': '',
-             'account_id': 3,
+             'account_id': 1,
              'seq_no': 1,
              'entry': '42 split Groceries 20 Clothes 22',
              'file_path': '/wef/wef/wef',
             },
-            {'amount': 22.0,
+            {'amount': -22.0,
              'vendor': None,
-             'dt': datetime(datetime.now().year, datetime.now().month, datetime.now().day, 0, 0),
+             'dt': date(datetime.now().year, datetime.now().month, datetime.now().day),
              'category': 'Clothes',
              'tags': '',
-             'account_id': 3,
+             'account_id': 1,
              'seq_no': 2,
              'entry': '42 split Groceries 20 Clothes 22',
              'file_path': '/wef/wef/wef',
@@ -392,11 +392,11 @@ class ParseTestCase(unittest.TestCase):
 
 class DBTestCase(unittest.TestCase):
     def test_tx_exists_in_db(self):
-        tx = {'id': '1'}
+        tx = {'id': 13}
         self.assertTrue(exists_in_db('tx', tx))
 
     def test_tx_does_not_exist_in_db(self):
-        tx = {'id': '-1'}
+        tx = {'id': -1}
         self.assertFalse(exists_in_db('tx', tx))
 
     def test_insert_tx_into_db(self):
