@@ -18,6 +18,7 @@ from dateutil.parser import parse
 from dateutil.parser._parser import ParserError
 
 ENTRY_DIR = os.environ['ENTRY_DIR']
+JOURNAL_MEMOS_DIR = os.environ['JOURNAL_MEMOS_DIR']
 
 VENDORS = [
     'DI',
@@ -562,24 +563,29 @@ def get_journal_front_matter(memo_date):
     tags = 'tags: journal'
     
     # Location
-    location_dict = json.loads(os.popen('termux-location').read())
-    latitude = location_dict['latitude']
-    longitude = location_dict['longitude']
-    altitude_ft = round(location_dict['altitude'] * 3.28084)
-    altitude = f'altitude: {altitude_ft}'
-    app = Nominatim(user_agent='journal')
-    coordinates = f'{latitude}, {longitude}'
-    location_raw = app.reverse(coordinates, language='en').raw
-    house_number = location_raw['address']['house_number']
-    road = location_raw['address']['road']
     try:
-        town = location_raw['address']['town']
-    except KeyError:
-        town = location_raw['address']['suburb']
-    state = location_raw['address']['state']
-    location = f'location: {house_number} {road}, {town}, {state}'
-    # location = location_raw['display_name']
-    # location = f'latitude: {latitude}\nlongitude: {longitude}\naltitude: {altitude}'
+        location_dict = json.loads(os.popen('termux-location').read())
+        latitude = location_dict['latitude']
+        longitude = location_dict['longitude']
+        altitude_ft = round(location_dict['altitude'] * 3.28084)
+        altitude = f'altitude: {altitude_ft}'
+        geolocator = Nominatim(user_agent='journal')
+        coordinates = f'{latitude}, {longitude}'
+        location_raw = geolocator.reverse(coordinates, language='en').raw
+        house_number = location_raw['address']['house_number']
+        road = location_raw['address']['road']
+        try:
+            town = location_raw['address']['town']
+        except KeyError:
+            town = location_raw['address']['suburb']
+        state = location_raw['address']['state']
+        location = f'location: {house_number} {road}, {town}, {state}'
+        # location = location_raw['display_name']
+        # location = f'latitude: {latitude}\nlongitude: {longitude}\naltitude: {altitude}'
+
+    except json.decoder.JSONDecodeError:
+        location = f'location: Unknown'
+        altitude = f'altitude: Unknown'
 
     # Weather
     weather_response = requests.get('http://wttr.in/?format=%C+%t+%h+humidity+%w+wind+%p+precip')
@@ -613,13 +619,12 @@ def insert_journal_into_file(entry):
 
         if journal_tally_date != today:
             # Copy journal_tally_file to dated_file
-            memo_date = datetime.now() - timedelta(days=1)
-            memo_date_str = (memo_date).strftime('%Y-%m-%d')
+            journal_tally_date_str = (journal_tally_date).strftime('%Y-%m-%d')
 
-            dated_journal_filename = f'/data/data/com.termux/files/home/storage/shared/journal/entries/text/{memo_date_str}-bryce-eryn-caine-journal.txt'
+            dated_journal_filename = f'{JOURNAL_MEMOS_DIR }/{journal_tally_date_str}-bryce-eryn-caine-journal.txt'
 
             # Add front_matter to dated_file
-            front_matter = get_journal_front_matter(memo_date)
+            front_matter = get_journal_front_matter(journal_tally_date)
 
             with open(dated_journal_filename, 'w') as dated_journal_filename:
                 dated_journal_filename.write(front_matter)
