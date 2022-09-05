@@ -1,9 +1,12 @@
+import os
 import unittest
 from datetime import date, datetime
 
 from entry.entry import (Transaction, exists_in_db, get_amount, get_dates,
-                         get_entry_type, get_started_action, is_todo,
+                         get_entry_type, get_started_action, is_todo, process_entry,
                          parse_txs)
+
+ENTRY_DIR = os.environ['ENTRY_DIR']
 
 
 class AmountTestCase(unittest.TestCase):
@@ -405,7 +408,8 @@ class DBTestCase(unittest.TestCase):
     def test_insert_tx_into_db(self):
         tx_dict = {'amount': 1}
         tx = Transaction(**tx_dict)
-        tx.insert_into_db()
+        # TODO: Reimplement after adding rollback
+        # tx.insert_into_db()
 
     def test_insert_tx_obj_into_db(self):
         transaction = Transaction('500 apple')
@@ -423,6 +427,16 @@ class TransactionClassCase(unittest.TestCase):
         self.assertEqual(transaction.amount, -3.45)
 
 
+class JournalTestCase(unittest.TestCase):
+    def test_journal_entry(self):
+        entry = 'walked with my family'
+        process_entry(entry)
+
+        journal_tally_filename = f'{ENTRY_DIR}/journal_tally.txt'
+
+        with open(journal_tally_filename) as journal_tally_file:
+            self.assertIn(entry, journal_tally_file.read())
+        
+
 if __name__ == '__main__':
     unittest.main()
-

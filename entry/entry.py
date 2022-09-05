@@ -550,76 +550,92 @@ def insert_contact_into_db(entry):
     pass
 
 
+def get_journal_front_matter(memo_date):
+    # Author
+    author = 'author: Bryce Caine'
+
+    # Date
+    memo_date_str = (memo_date).strftime('%Y-%m-%d')
+    entry_date = f'date: {memo_date_str}'
+
+    # Tags
+    tags = 'tags: journal'
+    
+    # Location
+    location_dict = json.loads(os.popen('termux-location').read())
+    latitude = location_dict['latitude']
+    longitude = location_dict['longitude']
+    altitude_ft = round(location_dict['altitude'] * 3.28084)
+    altitude = f'altitude: {altitude_ft}'
+    app = Nominatim(user_agent='journal')
+    coordinates = f'{latitude}, {longitude}'
+    location_raw = app.reverse(coordinates, language='en').raw
+    house_number = location_raw['address']['house_number']
+    road = location_raw['address']['road']
+    try:
+        town = location_raw['address']['town']
+    except KeyError:
+        town = location_raw['address']['suburb']
+    state = location_raw['address']['state']
+    location = f'location: {house_number} {road}, {town}, {state}'
+    # location = location_raw['display_name']
+    # location = f'latitude: {latitude}\nlongitude: {longitude}\naltitude: {altitude}'
+
+    # Weather
+    weather_response = requests.get('http://wttr.in/?format=%C+%t+%h+humidity+%w+wind+%p+precip')
+    weather = f'weather: {weather_response.text}'
+
+    front_matter = f'---\n{author}\n{entry_date}\n{tags}\n{location}\n{altitude}\n{weather}\n---\n'
+
+    return front_matter
+
+
 def insert_journal_into_file(entry):
     # Get journal_tally_file
     journal_tally_filename = f'{ENTRY_DIR}/journal_tally.txt'
-    journal_tally_file = open(journal_tally_filename, 'r+')
 
-    today = date.today()
-    
-    # Get date from journal_tally_file
-    journal_tally_data = journal_tally_file.read().splitlines(True)
-    
-    try:
-        journal_tally_date = parse(journal_tally_data[0])
-    except (IndexError, ParserError):
-        journal_tally_date = today
-
-    # TODO: Close file here?
-
-    journal_tally_date = date(journal_tally_date.year, journal_tally_date.month, journal_tally_date.day)
-
-    if journal_tally_date != today:
-        # Copy journal_tally_file to dated_file
-        current_date_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-
-        dated_journal_filename = f'/data/data/com.termux/files/home/storage/shared/journal/entries/text/{current_date_str}-bryce-eryn-caine-journal.txt'
-
-        # Add front_matter to dated_file
-        author = 'author: Bryce Caine'
-        entry_date = f'date: {current_date_str}'
-        tags = 'tags: journal'
-        location_dict = json.loads(os.popen('termux-location').read())
-        latitude = location_dict['latitude']
-        longitude = location_dict['longitude']
-        altitude_ft = round(location_dict['altitude'] * 3.28084)
-        altitude = f'altitude: {altitude_ft}'
-        app = Nominatim(user_agent='journal')
-        coordinates = f'{latitude}, {longitude}'
-        location_raw = app.reverse(coordinates, language='en').raw
-        house_number = location_raw['address']['house_number']
-        road = location_raw['address']['road']
+    with open(journal_tally_filename, 'r+') as journal_tally_file: 
+        today = date.today()
+        
+        # Get date from journal_tally_file
+        journal_tally_data = journal_tally_file.read().splitlines(True)
+        
         try:
-            town = location_raw['address']['town']
-        except KeyError:
-            town = location_raw['address']['suburb']
-        state = location_raw['address']['state']
-        location = f'location: {house_number} {road}, {town}, {state}'
-        # location = location_raw['display_name']
-        # location = f'latitude: {latitude}\nlongitude: {longitude}\naltitude: {altitude}'
-        weather_response = requests.get('http://wttr.in/?format=%C+%t+%h+humidity+%w+wind+%p+precip')
-        weather = f'weather: {weather_response.text}'
-        front_matter = f'---\n{author}\n{entry_date}\n{tags}\n{location}\n{altitude}\n{weather}\n---\n'
+            journal_tally_date = parse(journal_tally_data[0])
+            journal_tally_date = date(journal_tally_date.year, journal_tally_date.month, journal_tally_date.day)
 
-        with open(dated_journal_filename, 'w') as dated_journal_filename:
-            dated_journal_filename.write(front_matter)
-            dated_journal_filename.writelines(journal_tally_data[1:])
+        except (IndexError, ParserError):
+            journal_tally_date = date(today.year, today.month, today.day)
+            # Insert journal_tally_date into file
+            journal_tally_file.truncate(0)
+            journal_tally_file.write(f'{journal_tally_date}\n')
+            journal_tally_file.writelines(journal_tally_data)
 
-        # Clear contents of journal_tally_file
-        journal_tally_file.truncate(0)
+        if journal_tally_date != today:
+            # Copy journal_tally_file to dated_file
+            memo_date = datetime.now() - timedelta(days=1)
+            memo_date_str = (memo_date).strftime('%Y-%m-%d')
 
-        # Add date to journal_tally_file
-        journal_tally_file.write(f'{today}\n')
+            dated_journal_filename = f'/data/data/com.termux/files/home/storage/shared/journal/entries/text/{memo_date_str}-bryce-eryn-caine-journal.txt'
 
-    # Add entry to journal_tally_file
-    journal_tally_file.write(f'{entry}\n')
+            # Add front_matter to dated_file
+            front_matter = get_journal_front_matter(memo_date)
+
+            with open(dated_journal_filename, 'w') as dated_journal_filename:
+                dated_journal_filename.write(front_matter)
+                dated_journal_filename.writelines(journal_tally_data[1:])
+
+            # Clear contents of journal_tally_file
+            journal_tally_file.truncate(0)
+
+            # Add date to journal_tally_file
+            journal_tally_file.write(f'{today}\n')
+
+        # Add entry to journal_tally_file
+        journal_tally_file.write(f'{entry}\n')
 
 
-if __name__ == '__main__':
-    # TODO: Convert to argparse and include location
-    #       https://stackoverflow.com/a/33902937
-    sys.argv.pop(0)
-    entry = ' '.join(sys.argv)
+def process_entry(entry):
     entry_type = get_entry_type(entry)
 
     if entry_type == 'transaction':
@@ -646,3 +662,12 @@ if __name__ == '__main__':
     if entry_type is None:
         print('No entry type')
         insert_journal_into_file(entry)
+
+
+if __name__ == '__main__':
+    # TODO: Convert to argparse and include location
+    #       https://stackoverflow.com/a/33902937
+    sys.argv.pop(0)
+    entry = ' '.join(sys.argv)
+
+    process_entry(entry)
