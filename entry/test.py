@@ -2,8 +2,8 @@ import unittest
 from datetime import date, datetime
 
 from entry.entry import (Transaction, exists_in_db, get_amount, get_dates,
-                         get_entry_type, get_started_action, insert_tx_into_db,
-                         is_todo, parse_txs)
+                         get_entry_type, get_started_action, is_todo,
+                         parse_txs)
 
 
 class AmountTestCase(unittest.TestCase):
@@ -395,15 +395,17 @@ class ParseTestCase(unittest.TestCase):
 
 class DBTestCase(unittest.TestCase):
     def test_tx_exists_in_db(self):
-        tx = {'id': 13}
-        self.assertTrue(exists_in_db('tx', tx))
+        tx_dict = {'id': 13}
+        self.assertTrue(exists_in_db('tx', tx_dict))
 
     def test_tx_does_not_exist_in_db(self):
-        tx = {'id': -1}
-        self.assertFalse(exists_in_db('tx', tx))
+        tx_dict = {'id': -1}
+        self.assertFalse(exists_in_db('tx', tx_dict))
 
     def test_insert_tx_into_db(self):
-        insert_tx_into_db('5 socks')
+        tx_dict = {'amount': 1}
+        tx = Transaction(**tx_dict)
+        tx.insert_into_db()
 
     def test_insert_tx_obj_into_db(self):
         transaction = Transaction('500 apple')

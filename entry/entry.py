@@ -52,10 +52,14 @@ MONTH_NUMBERS = {
 
 
 class Transaction:
-    def __init__(self, entry):
-        self.entry = entry
+    def __init__(self, entry=None, **kwargs):
+        if entry:
+            self.entry = entry
 
-        transaction_dict = self.get_dict()
+            transaction_dict = self.get_dict()
+
+        else:
+            transaction_dict = kwargs
 
         for key, val in transaction_dict.items():
             setattr(self, key, val)
@@ -89,7 +93,7 @@ class Transaction:
         return transaction_dict
 
     def insert_into_db(self):
-        tx = self.get_dict()
+        tx = self.__dict__
 
         tx_keys = ','.join(tx.keys())
 
