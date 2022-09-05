@@ -3,8 +3,8 @@ import unittest
 from datetime import date, datetime
 
 from entry.entry import (Transaction, exists_in_db, get_amount, get_dates,
-                         get_entry_type, get_started_action, is_todo, process_entry,
-                         parse_txs)
+                         get_started_action, is_action, is_todo, is_tx,
+                         parse_txs, process_entry)
 
 ENTRY_DIR = os.environ['ENTRY_DIR']
 
@@ -150,22 +150,16 @@ class DateTestCase(unittest.TestCase):
 class EntryTestCase(unittest.TestCase):
     def test_tx_is_tx(self):
         entry = '1/1/2000 3.45 toothpick'
-        entry_type = get_entry_type(entry)
-
-        self.assertEqual(entry_type, 'transaction')
+        self.assertTrue(is_tx(entry))
 
     def test_action_is_action(self):
         entry = 'Sleep 1/1/2000'
-        entry_type = get_entry_type(entry)
-
-        self.assertEqual(entry_type, 'action')
+        self.assertTrue(is_action(entry))
 
     def test_journal_is_journal(self):
         entry = '1/1/2000 I slept today'
-        entry_type = get_entry_type(entry)
-
-        self.assertEqual(entry_type, 'journal')
-
+        self.assertFalse(is_tx(entry))
+        self.assertFalse(is_action(entry))
 
 class ParseTestCase(unittest.TestCase):
     def _test_parse_txs(self, entry, expected_txs):
