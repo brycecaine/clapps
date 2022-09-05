@@ -8,6 +8,7 @@ from dateutil.parser._parser import ParserError
 from geopy.geocoders import Nominatim
 
 ENTRY_DIR = os.environ['ENTRY_DIR']
+JOURNAL_MEMOS_DIR = os.environ['JOURNAL_MEMOS_DIR']
 
 
 def get_front_matter(memo_date):
@@ -83,7 +84,7 @@ def insert_into_file(entry):
             dated_journal_filename = f'{JOURNAL_MEMOS_DIR }/{journal_tally_date_str}-bryce-eryn-caine-journal.txt'
 
             # Add front_matter to dated_file
-            front_matter = journal.get_front_matter(journal_tally_date)
+            front_matter = get_front_matter(journal_tally_date)
 
             with open(dated_journal_filename, 'w') as dated_journal_filename:
                 dated_journal_filename.write(front_matter)
@@ -97,4 +98,3 @@ def insert_into_file(entry):
 
         # Add entry to journal_tally_file
         journal_tally_file.write(f'{entry}\n')
-
