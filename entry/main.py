@@ -383,6 +383,7 @@ def parse_txs(entry):
                     'seq_no': i,
                     'entry': entry,
                     'file_path': '/wef/wef/wef',
+                    'bank_status': 'Pending',
                 }
                 txs.append(tx)
     else:
@@ -398,6 +399,7 @@ def parse_txs(entry):
             'seq_no': 1,
             'entry': entry,
             'file_path': '/wef/wef/wef',
+            'bank_status': 'Pending',
         }
         txs.append(tx)
 
