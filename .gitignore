@@ -3,5 +3,6 @@ __pycache__
 *.bak
 *.txt
 *.csv
+*.ofx
 *.pyc
 .DS_Store
